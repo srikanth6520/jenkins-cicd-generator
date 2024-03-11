@@ -5,7 +5,7 @@ import os
 def generate_build_pipeline(repo_url, branch, language, build_tool, deploy=True):
     # Set up Jinja environment
     template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-    env = Environment(loader=FileSystemLoader(base_template_dir))
+    env = Environment(loader=FileSystemLoader(template_dir))
 
     # Load Jinja template based on language
     if language == 'java':
