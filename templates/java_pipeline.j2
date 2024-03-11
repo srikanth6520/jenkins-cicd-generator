@@ -1,8 +1,10 @@
 pipeline {
     agent any
     parameters {
-        string(name: 'GIT_REPO', defaultValue: '{{ repo_url | default("https://github.com/yourusername/yourrepo.git") }}', description: 'Git Repository URL')
-        string(name: 'GIT_BRANCH', defaultValue: '{{ branch | default("main") }}', description: 'Branch to build')
+        string(name: 'GIT_REPO', defaultValue: 'https://github.com/yourusername/yourrepo.git', description: 'Git Repository URL')
+        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Branch to build')
+        string(name: 'BUILD_TOOL', defaultValue: 'maven', description: 'Build Tool (maven/gradle)')
+        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy Helm Chart')
     }
     options {
         timeout(time: 1, unit: 'HOURS')
@@ -29,13 +31,15 @@ pipeline {
         stage('Build') {
             steps {
                 script {
-                    {% if build_tool == 'maven' %}
-                    sh 'mvn clean package -DskipTests'
-                    artifact 'target/*.jar'
-                    {% elif build_tool == 'gradle' %}
-                    sh 'gradle clean build'
-                    artifact 'build/libs/*.jar'
-                    {% endif %}
+                    if (params.BUILD_TOOL == 'maven') {
+                        sh 'mvn clean package -DskipTests'
+                        archiveArtifacts 'target/*.jar'
+                    } else if (params.BUILD_TOOL == 'gradle') {
+                        sh 'gradle clean build'
+                        archiveArtifacts 'build/libs/*.jar'
+                    } else {
+                        error 'Invalid build tool specified'
+                    }
                 }
             }
         }
@@ -46,11 +50,11 @@ pipeline {
                         writeFile(file: 'Dockerfile', text: '''
                         FROM openjdk:17-jdk-slim
                         WORKDIR /app
-                        COPY target/*.jar app.jar
+                        COPY ${params.BUILD_TOOL == 'maven' ? 'target/*.jar' : 'build/libs/*.jar'} app.jar
                         ENTRYPOINT ["java", "-jar", "app.jar"]
                         ''')
                     } else {
-                        print('Dockerfile already exists')
+                        echo 'Dockerfile already exists'
                     }
                 }
             }
@@ -58,25 +62,30 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    sh 'docker build -t ${docker_image} .'
+                    sh "docker build -t ${docker_image} ."
                 }
             }
         }
         stage('Docker Push') {
             steps {
                 script {
-                    sh 'docker push ${docker_image}'
+                    sh "docker push ${docker_image}"
                 }
             }
         }
-        {% if deploy == true %}
         stage('Helm Deploy') {
+            when {
+                expression {
+                    params.DEPLOY == true
+                }
+            }
             steps {
                 script {
-                    sh 'helm upgrade --install ${job_name} ./helm-chart --namespace yournamespace --set image.tag=${docker_image}'
+                    withKubeConfig([credentialsId: 'my-AKS-cred']) {
+                        sh "helm upgrade --install ${job_name} ./helm-chart --namespace yournamespace --set image.tag=${docker_image}"
+                    }
                 }
             }
         }
-        {% endif %}
     }
 }
