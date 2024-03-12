@@ -1,10 +1,10 @@
 pipeline {
     agent any
     parameters {
-        string(name: 'GIT_REPO', defaultValue: 'https://github.com/yourusername/yourrepo.git', description: 'Git Repository URL')
-        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Branch to build')
-        string(name: 'BUILD_TOOL', defaultValue: 'maven', description: 'Build Tool (maven/gradle)')
-        string(name: 'NAMESPACE', defaultValue: 'yournamespace', description: 'Namespace to deploy to')
+        string(name: 'GIT_REPO', defaultValue: '{{ repo_url }}', description: 'Git Repository URL')
+        string(name: 'GIT_BRANCH', defaultValue: '{{ branch }}', description: 'Branch to build')
+        string(name: 'BUILD_TOOL', defaultValue: '{{ build_tool }}', description: 'Build Tool (maven/gradle)')
+        string(name: 'NAMESPACE', defaultValue: '{{ namespace }}', description: 'Namespace to deploy to')
     }
     options {
         timeout(time: 1, unit: 'HOURS')
@@ -32,29 +32,11 @@ pipeline {
             steps {
                 script {
                     if (params.BUILD_TOOL == 'maven') {
-                        sh 'mvn clean package -DskipTests'
-                        archiveArtifacts 'target/*.jar'
+                        sh 'mvn clean install'
                     } else if (params.BUILD_TOOL == 'gradle') {
-                        sh 'gradle clean build'
-                        archiveArtifacts 'build/libs/*.jar'
+                        sh 'gradle build'
                     } else {
                         error 'Invalid build tool specified'
-                    }
-                }
-            }
-        }
-        stage('Create Docker Image') {
-            steps {
-                script {
-                    if (!fileExists('Dockerfile')) {
-                        writeFile(file: 'Dockerfile', text: '''
-                        FROM openjdk:17-jdk-slim
-                        WORKDIR /app
-                        COPY ${params.BUILD_TOOL == 'maven' ? 'target/*.jar' : 'build/libs/*.jar'} app.jar
-                        ENTRYPOINT ["java", "-jar", "app.jar"]
-                        ''')
-                    } else {
-                        echo 'Dockerfile already exists'
                     }
                 }
             }
@@ -62,14 +44,14 @@ pipeline {
         stage('Docker Build') {
             steps {
                 script {
-                    sh "docker build -t ${docker_image} ."
+                    sh 'docker build -t ${docker_image} .'
                 }
             }
         }
         stage('Docker Push') {
             steps {
                 script {
-                    sh "docker push ${docker_image}"
+                    sh 'docker push ${docker_image}'
                 }
             }
         }
