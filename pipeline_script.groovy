@@ -14,7 +14,7 @@ pipeline {
             steps {
                 script {
                     // Execute the Python script to generate the CI/CD pipeline script
-                    def cmd = "python generate_pipeline.py -r ${params.GIT_REPO} -b ${params.GIT_BRANCH} -l ${params.LANGUAGE} -t ${params.BUILD_TOOL} -d ${params.DEPLOY} -o pipeline_script.groovy"
+                    def cmd = "jenkins-pipeline-java-nodejs.py -r ${params.GIT_REPO} -b ${params.GIT_BRANCH} -l ${params.LANGUAGE} -t ${params.BUILD_TOOL} -d ${params.DEPLOY} -o pipeline_script.groovy"
                     sh cmd
                 }
             }
