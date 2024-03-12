@@ -2,11 +2,10 @@ import argparse
 from jinja2 import Environment, FileSystemLoader
 import os
 
-def generate_build_pipeline(repo_url, branch, language, build_tool, deploy=True):
+def generate_build_pipeline(repo_url, branch, language, build_tool, namespace, deploy=True):
     # Set up Jinja environment
     template_dir = os.path.join(os.path.dirname(__file__), 'templates')
     env = Environment(loader=FileSystemLoader(template_dir))
-
     # Load Jinja template based on language
     if language == 'java':
         template = env.get_template('java_pipeline.j2')
@@ -19,6 +18,8 @@ def generate_build_pipeline(repo_url, branch, language, build_tool, deploy=True)
     pipeline_script = template.render(
         repo_url=repo_url,
         branch=branch,
+        build_tool=build_tool,
+        namespace=namespace,
         deploy=deploy
     )
 
@@ -28,11 +29,12 @@ def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Generate Jenkins pipeline file')
     parser.add_argument('-r', '--repo-url', type=str, help='Repository URL', dest='repo_url', required=True)
-    parser.add_argument('-b', '--branch', type=str, help='Branch', dest='branch')
+    parser.add_argument('-b', '--branch', type=str, help='Branch', dest='branch', default='main')
     parser.add_argument('-l', '--language', type=str, help='Language', dest='language', required=True, choices=['java', 'javascript'])
-    parser.add_argument('-t', '--build-tool', type=str, help='Build tool', dest='build_tool', required=True, choices=['maven', 'gradle', 'npm'])
+    parser.add_argument('-t', '--build-tool', type=str, help='Build tool', dest='build_tool', required=True, choices=['maven', 'gradle', 'npm', 'yarn'])
+    parser.add_argument('-n', '--namespace', type=str, help='Namespace', dest='namespace', required=True)
     parser.add_argument('-d', '--deploy', action='store_true', help='Deploy Helm chart', dest='deploy')
-    parser.add_argument('-o', '--output-file', type=str, help='Output file', dest='output_file', required=True)
+    parser.add_argument('-o', '--output-file', type=str, help='Output file', dest='output_file', default='default_pipeline.groovy')
     
     args = parser.parse_args()
 
@@ -42,6 +44,7 @@ def main():
         args.branch,
         args.language,
         args.build_tool,
+        args.namespace,
         args.deploy
     )
 
