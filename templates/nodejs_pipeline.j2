@@ -5,6 +5,9 @@ pipeline {
         string(name: 'GIT_BRANCH', defaultValue: '{{ branch }}', description: 'Branch to build')
         string(name: 'BUILD_TOOL', defaultValue: '{{ build_tool }}', description: 'Build Tool (npm/yarn)')
         string(name: 'NAMESPACE', defaultValue: '{{ namespace }}', description: 'Namespace to deploy to')
+        string(name: 'DOCKER_IMAGE', defaultValue: 'my-docker-image', description: 'Docker Image')
+        string(name: 'DOCKER_TAG', defaultValue: 'latest', description: 'Docker Tag')
+        string(name: 'JOB_NAME', defaultValue: 'my-job-name', description: 'Job Name')
     }
     options {
         timeout(time: 1, unit: 'HOURS')
@@ -16,13 +19,14 @@ pipeline {
             projectUrlStr: '${params.GIT_REPO}'
         )
     }
-    def job_name = "${env.JOB_NAME.split('/')[-1]}"
+    def job_name = "${JOB_NAME}"
     def commit_hash = "${env.GIT_COMMIT.substring(0, 7)}"
     def build_number = "${env.BUILD_NUMBER}"
-    def docker_image = "${job_name}:${commit_hash}-${build_number}"
+    def docker_image = "${DOCKER_IMAGE}:${commit_hash}-${build_number}-${DOCKER_TAG}"
     stages {
         stage('Checkout') {
             steps {
+                echo 'Checking out source code from Git repository...'
                 script {
                     git (url: "${params.GIT_REPO}", branch: "${params.GIT_BRANCH}")
                 }
@@ -30,11 +34,14 @@ pipeline {
         }
         stage('Build') {
             steps {
+                echo 'Building the application...'
                 script {
                     if (params.BUILD_TOOL == 'npm') {
                         sh 'npm install'
+                        sh 'npm run build'
                     } else if (params.BUILD_TOOL == 'yarn') {
                         sh 'yarn install'
+                        sh 'yarn build'
                     } else {
                         error 'Invalid build tool specified'
                     }
@@ -46,35 +53,36 @@ pipeline {
                 script {
                     if (!fileExists('Dockerfile')) {
                         writeFile(file: 'Dockerfile', text: '''
-                        FROM node:16
+                        FROM node:14-alpine
                         WORKDIR /app
-                        COPY package*.json ./
-                        RUN ${params.BUILD_TOOL} install
                         COPY . .
-                        ENTRYPOINT ["npm", "start"]
+                        CMD ["npm", "start"]
                         ''')
                     } else {
-                        print('Dockerfile already exists')
+                        echo 'Dockerfile already exists'
                     }
                 }
             }
         }
         stage('Docker Build') {
             steps {
+                echo 'Building Docker image...'
                 script {
-                    sh 'docker build -t ${docker_image} .'
+                    sh "docker build -t ${docker_image} ."
                 }
             }
         }
         stage('Docker Push') {
             steps {
+                echo 'Pushing Docker image to registry...'
                 script {
-                    sh 'docker push ${docker_image}'
+                    sh "docker push ${docker_image}"
                 }
             }
         }
         stage('Helm Deploy') {
             steps {
+                echo 'Deploying application using Helm...'
                 script {
                     sh "helm upgrade --install ${job_name} ./helm-chart --namespace ${params.NAMESPACE} --set image.tag=${docker_image}"
                 }
