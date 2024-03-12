@@ -32,6 +32,7 @@ def main():
     parser.add_argument('-l', '--language', type=str, help='Language', dest='language', required=True, choices=['java', 'javascript'])
     parser.add_argument('-t', '--build-tool', type=str, help='Build tool', dest='build_tool', required=True, choices=['maven', 'gradle', 'npm'])
     parser.add_argument('-d', '--deploy', action='store_true', help='Deploy Helm chart', dest='deploy')
+    parser.add_argument('-o', '--output-file', type=str, help='Output file', dest='output_file', required=True)
     
     args = parser.parse_args()
 
@@ -44,8 +45,9 @@ def main():
         args.deploy
     )
 
-    # Print the generated pipeline script
-    print(pipeline_script)
+    # Write the generated pipeline script to the output file
+    with open(args.output_file, 'w') as f:
+        f.write(pipeline_script)
 
 if __name__ == "__main__":
     main()
