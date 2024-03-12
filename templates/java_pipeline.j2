@@ -4,7 +4,7 @@ pipeline {
         string(name: 'GIT_REPO', defaultValue: 'https://github.com/yourusername/yourrepo.git', description: 'Git Repository URL')
         string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Branch to build')
         string(name: 'BUILD_TOOL', defaultValue: 'maven', description: 'Build Tool (maven/gradle)')
-        booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy Helm Chart')
+        string(name: 'NAMESPACE', defaultValue: 'yournamespace', description: 'Namespace to deploy to')
     }
     options {
         timeout(time: 1, unit: 'HOURS')
@@ -74,16 +74,9 @@ pipeline {
             }
         }
         stage('Helm Deploy') {
-            when {
-                expression {
-                    params.DEPLOY == true
-                }
-            }
             steps {
                 script {
-                    withKubeConfig([credentialsId: 'my-AKS-cred']) {
-                        sh "helm upgrade --install ${job_name} ./helm-chart --namespace yournamespace --set image.tag=${docker_image}"
-                    }
+                    sh "helm upgrade --install ${job_name} ./helm-chart --namespace ${params.NAMESPACE} --set image.tag=${docker_image}"
                 }
             }
         }
