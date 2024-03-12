@@ -5,6 +5,9 @@ pipeline {
         string(name: 'GIT_BRANCH', defaultValue: '{{ branch }}', description: 'Branch to build')
         string(name: 'BUILD_TOOL', defaultValue: '{{ build_tool }}', description: 'Build Tool (maven/gradle)')
         string(name: 'NAMESPACE', defaultValue: '{{ namespace }}', description: 'Namespace to deploy to')
+        string(name: 'DOCKER_IMAGE', defaultValue: 'my-docker-image', description: 'Docker Image')
+        string(name: 'DOCKER_TAG', defaultValue: 'latest', description: 'Docker Tag')
+        string(name: 'JOB_NAME', defaultValue: 'my-job-name', description: 'Job Name')
     }
     options {
         timeout(time: 1, unit: 'HOURS')
@@ -16,10 +19,10 @@ pipeline {
             projectUrlStr: '${params.GIT_REPO}'
         )
     }
-    def job_name = "${env.JOB_NAME.split('/')[-1]}"
+    def job_name = "${JOB_NAME}"
     def commit_hash = "${env.GIT_COMMIT.substring(0, 7)}"
     def build_number = "${env.BUILD_NUMBER}"
-    def docker_image = "${job_name}:${commit_hash}-${build_number}"
+    def docker_image = "${DOCKER_IMAGE}:${commit_hash}-${build_number}-${DOCKER_TAG}"
     stages {
         stage('Checkout') {
             steps {
@@ -43,11 +46,27 @@ pipeline {
                 }
             }
         }
+        stage('Create Docker Image') {
+            steps {
+                script {
+                    if (!fileExists('Dockerfile')) {
+                        writeFile(file: 'Dockerfile', text: '''
+                        FROM openjdk:17-jdk-slim
+                        WORKDIR /app
+                        COPY ${params.BUILD_TOOL == 'maven' ? 'target/*.jar' : 'build/libs/*.jar'} app.jar
+                        ENTRYPOINT ["java", "-jar", "app.jar"]
+                        ''')
+                    } else {
+                        echo 'Dockerfile already exists'
+                    }
+                }
+            }
+        }
         stage('Docker Build') {
             steps {
                 echo 'Building Docker image...'
                 script {
-                    sh 'docker build -t ${docker_image} .'
+                    sh "docker build -t ${docker_image} ."
                 }
             }
         }
@@ -55,7 +74,7 @@ pipeline {
             steps {
                 echo 'Pushing Docker image to registry...'
                 script {
-                    sh 'docker push ${docker_image}'
+                    sh "docker push ${docker_image}"
                 }
             }
         }
