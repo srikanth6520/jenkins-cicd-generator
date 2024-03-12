@@ -23,6 +23,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
+                echo 'Checking out source code from Git repository...'
                 script {
                     git (url: "${params.GIT_REPO}", branch: "${params.GIT_BRANCH}")
                 }
@@ -30,6 +31,7 @@ pipeline {
         }
         stage('Build') {
             steps {
+                echo 'Building the application...'
                 script {
                     if (params.BUILD_TOOL == 'maven') {
                         sh 'mvn clean install'
@@ -43,6 +45,7 @@ pipeline {
         }
         stage('Docker Build') {
             steps {
+                echo 'Building Docker image...'
                 script {
                     sh 'docker build -t ${docker_image} .'
                 }
@@ -50,6 +53,7 @@ pipeline {
         }
         stage('Docker Push') {
             steps {
+                echo 'Pushing Docker image to registry...'
                 script {
                     sh 'docker push ${docker_image}'
                 }
@@ -57,6 +61,7 @@ pipeline {
         }
         stage('Helm Deploy') {
             steps {
+                echo 'Deploying application using Helm...'
                 script {
                     sh "helm upgrade --install ${job_name} ./helm-chart --namespace ${params.NAMESPACE} --set image.tag=${docker_image}"
                 }
