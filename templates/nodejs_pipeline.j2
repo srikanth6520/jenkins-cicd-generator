@@ -8,6 +8,7 @@ pipeline {
         string(name: 'DOCKER_IMAGE', defaultValue: 'my-docker-image', description: 'Docker Image')
         string(name: 'DOCKER_TAG', defaultValue: 'latest', description: 'Docker Tag')
         string(name: 'JOB_NAME', defaultValue: 'my-job-name', description: 'Job Name')
+        string(name: 'DOCKERHUB_CREDENTIALS_ID', defaultValue: 'dockerhub-credentials', description: 'Docker Hub Credentials ID')
     }
     options {
         timeout(time: 1, unit: 'HOURS')
@@ -68,7 +69,10 @@ pipeline {
             steps {
                 echo 'Building Docker image...'
                 script {
-                    sh "docker build -t ${docker_image} ."
+                    withCredentials([usernamePassword(credentialsId: params.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                        sh "docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD"
+                        sh "docker build -t ${docker_image} ."
+                    }
                 }
             }
         }
@@ -76,7 +80,10 @@ pipeline {
             steps {
                 echo 'Pushing Docker image to registry...'
                 script {
-                    sh "docker push ${docker_image}"
+                    withCredentials([usernamePassword(credentialsId: params.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                        sh "docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD"
+                        sh "docker push ${docker_image}"
+                    }
                 }
             }
         }
