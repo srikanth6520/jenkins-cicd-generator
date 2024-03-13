@@ -4,12 +4,12 @@ pipeline {
         string(name: 'GIT_REPO', defaultValue: '{{ repo_url }}', description: 'Git Repository URL')
         string(name: 'GIT_BRANCH', defaultValue: '{{ branch }}', description: 'Branch to build')
         string(name: 'BUILD_TOOL', defaultValue: '{{ build_tool }}', description: 'Build Tool (maven/gradle)')
-        string(name: 'NAMESPACE', defaultValue: '{{ namespace }}', description: 'Namespace to deploy to')
         string(name: 'DOCKER_IMAGE', defaultValue: 'my-docker-image', description: 'Docker Image')
         string(name: 'DOCKER_TAG', defaultValue: 'latest', description: 'Docker Tag')
-        string(name: 'JOB_NAME', defaultValue: 'my-job-name', description: 'Job Name')
         string(name: 'DOCKERHUB_CREDENTIALS_ID', defaultValue: 'dockerhub-credentials', description: 'Docker Hub Credentials ID')
-    }
+        string(name: 'NAMESPACE', defaultValue: '{{ namespace }}', description: 'Namespace to deploy to')  
+        string(name: 'JOB_NAME', defaultValue: 'my-job-name', description: 'Job Name')
+  }
     options {
         timeout(time: 1, unit: 'HOURS')
         disableConcurrentBuilds()
