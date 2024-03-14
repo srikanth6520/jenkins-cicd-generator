@@ -107,6 +107,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ${params.JOB_NAME}
+  namespace: ${params.NAMESPACE} # Add this line to specify the namespace
 spec:
   replicas: 3
   selector:
@@ -132,6 +133,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: ${params.JOB_NAME}-service
+  namespace: ${params.NAMESPACE}
 spec:
   selector:
     app: ${params.JOB_NAME}
