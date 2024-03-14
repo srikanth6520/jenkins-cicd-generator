@@ -34,7 +34,7 @@ pipeline {
             }
             post {
                 success {
-                    archiveArtifacts 'dist/*' // Archive the built application files
+                    archiveArtifacts '*' // Archive the built application files
                 }
             }
         }
@@ -92,7 +92,7 @@ metadata:
   name: ${params.JOB_NAME}
   namespace: ${params.NAMESPACE} # Add this line to specify the namespace
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: ${params.JOB_NAME}
@@ -114,6 +114,31 @@ spec:
                     withKubeConfig(credentialsId: params.KUBE_CREDENTIALS_ID) {
                         sh "kubectl apply -f ${params.MANIFESTS_DIR}/deployment.yaml"
                     }
+                }
+            }
+        }
+        stage('Create Service Manifest') {
+            steps {
+                echo 'Creating service manifest...'
+                script {
+                    // Dynamically generate the service manifest
+                    def serviceManifest = """
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${params.JOB_NAME}-service
+  namespace: ${params.NAMESPACE}
+spec:
+  selector:
+    app: ${params.JOB_NAME}
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+  type: LoadBalancer
+"""
+                    // Write service manifest to a file
+                    writeFile file: "${params.MANIFESTS_DIR}/service.yaml", text: serviceManifest
                 }
             }
         }
