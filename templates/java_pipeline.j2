@@ -9,6 +9,8 @@ pipeline {
         string(name: 'DOCKERHUB_CREDENTIALS_ID', defaultValue: 'dockerhub-credentials', description: 'Docker Hub Credentials ID')
         string(name: 'NAMESPACE', defaultValue: '{{ namespace }}', description: 'Namespace to deploy to')
         string(name: 'JOB_NAME', defaultValue: 'test', description: 'Job Name')
+        string(name: 'MANIFESTS_DIR', defaultValue: 'manifests', description: 'Directory to store manifest files')
+        string(name: 'KUBE_CREDENTIALS_ID', defaultValue: 'k8s-credentials', description: 'Kubernetes Credentials ID')
     }
     tools {
         maven 'maven3.9.6'
@@ -95,13 +97,66 @@ pipeline {
                 }
             }
         }
-        stage('Helm Deploy') {
+        stage('Deploy to Kubernetes') {
             steps {
-                echo 'Deploying application using Helm...'
+                echo 'Deploying application to Kubernetes...'
                 script {
-                    sh "helm upgrade --install ${params.JOB_NAME} ./helm-chart --namespace ${params.NAMESPACE} --set image.tag=${params.DOCKER_IMAGE}:${params.DOCKER_TAG}"
+                    // Dynamically generate the deployment manifest
+                    def deploymentManifest = """
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${params.JOB_NAME}
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ${params.JOB_NAME}
+  template:
+    metadata:
+      labels:
+        app: ${params.JOB_NAME}
+    spec:
+      containers:
+      - name: ${params.JOB_NAME}
+        image: ${params.DOCKER_IMAGE}:${params.DOCKER_TAG}
+        ports:
+        - containerPort: 8080
+"""
+                    // Write deployment manifest to a file
+                    writeFile file: "${params.MANIFESTS_DIR}/deployment.yaml", text: deploymentManifest
+
+                    // Dynamically generate the service manifest
+                    def serviceManifest = """
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${params.JOB_NAME}-service
+spec:
+  selector:
+    app: ${params.JOB_NAME}
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  type: LoadBalancer
+"""
+                    // Write service manifest to a file
+                    writeFile file: "${params.MANIFESTS_DIR}/service.yaml", text: serviceManifest
+
+                    // Apply the manifests using Kubernetes credentials
+                    withKubeConfig(credentialsId: params.KUBE_CREDENTIALS_ID) {
+                        sh "kubectl apply -f ${params.MANIFESTS_DIR}/deployment.yaml"
+                        sh "kubectl apply -f ${params.MANIFESTS_DIR}/service.yaml"
+                    }
                 }
             }
+        }
+    }
+    post {
+        success {
+            echo 'Archiving manifest files...'
+            archiveArtifacts artifacts: "${params.MANIFESTS_DIR}/*.yaml", onlyIfSuccessful: true
         }
     }
 }
