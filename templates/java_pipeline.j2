@@ -12,6 +12,7 @@ pipeline {
         string(name: 'JOB_NAME', defaultValue: 'test', description: 'Job Name')
         string(name: 'MANIFESTS_DIR', defaultValue: 'manifests', description: 'Directory to store manifest files')
         string(name: 'KUBE_CREDENTIALS_ID', defaultValue: 'k8s-credentials', description: 'Kubernetes Credentials ID')
+        string(name: 'DOCKERHUB_USERNAME', defaultValue: '', description: 'Docker Hub Username')
     }
     tools {
         maven 'maven3.9.6'
@@ -126,7 +127,7 @@ pipeline {
                         spec:
                           containers:
                           - name: ${params.JOB_NAME}
-                            image: ${params.DOCKER_IMAGE}:${params.DOCKER_TAG}
+                            image: ${DOCKERHUB_USERNAME}/${params.DOCKER_IMAGE}:${params.DOCKER_TAG}
                             ports:
                             - containerPort: 8080
                     """
