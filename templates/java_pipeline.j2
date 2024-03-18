@@ -1,13 +1,14 @@
 pipeline {
     agent any
     parameters {
-        string(name: 'GIT_REPO', defaultValue: '{{ repo_url }}', description: 'Git Repository URL')
-        string(name: 'GIT_BRANCH', defaultValue: '{{ branch }}', description: 'Branch to build')
-        string(name: 'BUILD_TOOL', defaultValue: '{{ build_tool }}', description: 'Build Tool (maven/gradle)')
+        string(name: 'GIT_REPO', defaultValue: 'https://example.com', description: 'Git Repository URL')
+        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Branch to build')
+        string(name: 'BUILD_TOOL', defaultValue: 'maven', description: 'Build Tool (maven/gradle)')
+        string(name: 'DOCKERFILE_DIR', defaultValue: 'path/to/dockerfiles', description: 'Directory where Dockerfile is located')
         string(name: 'DOCKER_IMAGE', defaultValue: 'my-docker-image', description: 'Docker Image')
         string(name: 'DOCKER_TAG', defaultValue: 'latest', description: 'Docker Tag')
         string(name: 'DOCKERHUB_CREDENTIALS_ID', defaultValue: 'dockerhub-credentials', description: 'Docker Hub Credentials ID')
-        string(name: 'NAMESPACE', defaultValue: '{{ namespace }}', description: 'Namespace to deploy to')
+        string(name: 'NAMESPACE', defaultValue: 'default', description: 'Namespace to deploy to')
         string(name: 'JOB_NAME', defaultValue: 'test', description: 'Job Name')
         string(name: 'MANIFESTS_DIR', defaultValue: 'manifests', description: 'Directory to store manifest files')
         string(name: 'KUBE_CREDENTIALS_ID', defaultValue: 'k8s-credentials', description: 'Kubernetes Credentials ID')
@@ -20,7 +21,7 @@ pipeline {
             steps {
                 echo 'Checking out source code from Git repository...'
                 script {
-                    git url: "${params.GIT_REPO}", branch: "${params.GIT_BRANCH}"
+                    git url: params.GIT_REPO, branch: params.GIT_BRANCH
                 }
             }
         }
@@ -39,6 +40,7 @@ pipeline {
             }
             post {
                 success {
+                    echo 'Archiving built artifacts...'
                     archiveArtifacts 'target/*.war' // Archive the built WAR files
                 }
             }
@@ -60,7 +62,14 @@ pipeline {
 
                     dockerfileContent += 'ENTRYPOINT ["java", "-jar", "app.war"]'
 
-                    writeFile file: 'Dockerfile', text: dockerfileContent
+                    // Specify the directory to store the Dockerfile
+                    def dockerfilePath = "${params.DOCKERFILE_DIR}/Dockerfile"
+
+                    // Write Dockerfile to the specified directory
+                    writeFile file: dockerfilePath, text: dockerfileContent
+
+                    // Output the path where Dockerfile is stored
+                    echo "Generated Dockerfile stored at: ${params.DOCKERFILE_DIR}"
                 }
             }
         }
@@ -68,14 +77,14 @@ pipeline {
             steps {
                 echo 'Building Docker image...'
                 script {
-                    def dockerBuildArgs = ''
+                    def dockerBuildArgs = "-f ${params.DOCKERFILE_DIR}/Dockerfile"
                     if (params.BUILD_TOOL == 'maven') {
-                        dockerBuildArgs = "--build-arg WAR_FILE=target/*.war"
+                        dockerBuildArgs += " --build-arg WAR_FILE=target/*.war"
                     } else if (params.BUILD_TOOL == 'gradle') {
-                        dockerBuildArgs = "--build-arg WAR_FILE=build/libs/*.war"
+                        dockerBuildArgs += " --build-arg WAR_FILE=build/libs/*.war"
                     }
                     withCredentials([usernamePassword(credentialsId: params.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
-                        def buildStatus = sh(script: "docker build -t ${DOCKERHUB_USERNAME}/${params.DOCKER_IMAGE}:${params.DOCKER_TAG} ${dockerBuildArgs} .", returnStatus: true)
+                        def buildStatus = sh(script: "docker build ${dockerBuildArgs} -t ${DOCKERHUB_USERNAME}/${params.DOCKER_IMAGE}:${params.DOCKER_TAG} .", returnStatus: true)
                         if (buildStatus != 0) {
                             error 'Failed to build Docker image'
                         }
@@ -89,10 +98,7 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: params.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
                         sh "docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD"
-                        def pushStatus = sh(script: "docker push ${DOCKERHUB_USERNAME}/${params.DOCKER_IMAGE}:${params.DOCKER_TAG}", returnStatus: true)
-                        if (pushStatus != 0) {
-                            error 'Failed to push Docker image'
-                        }
+                        sh "docker push ${DOCKERHUB_USERNAME}/${params.DOCKER_IMAGE}:${params.DOCKER_TAG}"
                     }
                 }
             }
@@ -103,46 +109,46 @@ pipeline {
                 script {
                     // Dynamically generate the deployment manifest
                     def deploymentManifest = """
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: ${params.JOB_NAME}
-  namespace: ${params.NAMESPACE} # Add this line to specify the namespace
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: ${params.JOB_NAME}
-  template:
-    metadata:
-      labels:
-        app: ${params.JOB_NAME}
-    spec:
-      containers:
-      - name: ${params.JOB_NAME}
-        image: ${params.DOCKER_IMAGE}:${params.DOCKER_TAG}
-        ports:
-        - containerPort: 8080
-"""
+                    apiVersion: apps/v1
+                    kind: Deployment
+                    metadata:
+                      name: ${params.JOB_NAME}
+                      namespace: ${params.NAMESPACE}
+                    spec:
+                      replicas: 1
+                      selector:
+                        matchLabels:
+                          app: ${params.JOB_NAME}
+                      template:
+                        metadata:
+                          labels:
+                            app: ${params.JOB_NAME}
+                        spec:
+                          containers:
+                          - name: ${params.JOB_NAME}
+                            image: ${params.DOCKER_IMAGE}:${params.DOCKER_TAG}
+                            ports:
+                            - containerPort: 8080
+                    """
                     // Write deployment manifest to a file
                     writeFile file: "${params.MANIFESTS_DIR}/deployment.yaml", text: deploymentManifest
 
                     // Dynamically generate the service manifest
                     def serviceManifest = """
-apiVersion: v1
-kind: Service
-metadata:
-  name: ${params.JOB_NAME}-service
-  namespace: ${params.NAMESPACE}
-spec:
-  selector:
-    app: ${params.JOB_NAME}
-  ports:
-    - protocol: TCP
-      port: 8080
-      targetPort: 8080
-  type: LoadBalancer
-"""
+                    apiVersion: v1
+                    kind: Service
+                    metadata:
+                      name: ${params.JOB_NAME}-service
+                      namespace: ${params.NAMESPACE}
+                    spec:
+                      selector:
+                        app: ${params.JOB_NAME}
+                      ports:
+                        - protocol: TCP
+                          port: 8080
+                          targetPort: 8080
+                      type: LoadBalancer
+                    """
                     // Write service manifest to a file
                     writeFile file: "${params.MANIFESTS_DIR}/service.yaml", text: serviceManifest
 
