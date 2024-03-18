@@ -4,6 +4,7 @@ pipeline {
         string(name: 'GIT_REPO', defaultValue: '{{ repo_url }}', description: 'Git Repository URL')
         string(name: 'GIT_BRANCH', defaultValue: '{{ branch }}', description: 'Branch to build')
         string(name: 'BUILD_TOOL', defaultValue: '{{ build_tool }}', description: 'Build Tool (npm)')
+        string(name: 'DOCKERFILE_DIR', defaultValue: 'path/to/dockerfiles', description: 'Directory where Dockerfile is located')
         string(name: 'DOCKER_IMAGE', defaultValue: 'my-nodejs-image', description: 'Docker Image')
         string(name: 'DOCKER_TAG', defaultValue: 'latest', description: 'Docker Tag')
         string(name: 'DOCKERHUB_CREDENTIALS_ID', defaultValue: 'dockerhub-credentials', description: 'Docker Hub Credentials ID')
@@ -48,7 +49,14 @@ pipeline {
                     '''
                     dockerfileContent += 'CMD ["npm", "start"]'
 
-                    writeFile file: 'Dockerfile', text: dockerfileContent
+                    // Specify the directory to store the Dockerfile
+                    def dockerfilePath = "${params.DOCKERFILE_DIR}/Dockerfile"
+
+                    // Write Dockerfile to the specified directory
+                    writeFile file: dockerfilePath, text: dockerfileContent
+
+                    // Output the path where Dockerfile is stored
+                    echo "Generated Dockerfile stored at: ${params.DOCKERFILE_DIR}"
                 }
             }
         }
@@ -56,9 +64,14 @@ pipeline {
             steps {
                 echo 'Building Docker image...'
                 script {
-                    def dockerBuildArgs = ''
+                    def dockerBuildArgs = "-f ${params.DOCKERFILE_DIR}/Dockerfile"
+                    if (params.BUILD_TOOL == 'npm') {
+                        // No additional build args needed for npm
+                    } else {
+                        error 'Invalid build tool specified'
+                    }
                     withCredentials([usernamePassword(credentialsId: params.DOCKERHUB_CREDENTIALS_ID, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
-                        def buildStatus = sh(script: "docker build -t ${DOCKERHUB_USERNAME}/${params.DOCKER_IMAGE}:${params.DOCKER_TAG} .", returnStatus: true)
+                        def buildStatus = sh(script: "docker build ${dockerBuildArgs} -t ${DOCKERHUB_USERNAME}/${params.DOCKER_IMAGE}:${params.DOCKER_TAG} .", returnStatus: true)
                         if (buildStatus != 0) {
                             error 'Failed to build Docker image'
                         }
@@ -90,7 +103,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ${params.JOB_NAME}
-  namespace: ${params.NAMESPACE} # Add this line to specify the namespace
+  namespace: ${params.NAMESPACE}
 spec:
   replicas: 1
   selector:
@@ -110,17 +123,6 @@ spec:
                     // Write deployment manifest to a file
                     writeFile file: "${params.MANIFESTS_DIR}/deployment.yaml", text: deploymentManifest
 
-                    // Apply the deployment manifest using Kubernetes credentials
-                    withKubeConfig(credentialsId: params.KUBE_CREDENTIALS_ID) {
-                        sh "kubectl apply -f ${params.MANIFESTS_DIR}/deployment.yaml"
-                    }
-                }
-            }
-        }
-        stage('Create Service Manifest') {
-            steps {
-                echo 'Creating service manifest...'
-                script {
                     // Dynamically generate the service manifest
                     def serviceManifest = """
 apiVersion: v1
@@ -139,6 +141,12 @@ spec:
 """
                     // Write service manifest to a file
                     writeFile file: "${params.MANIFESTS_DIR}/service.yaml", text: serviceManifest
+
+                    // Apply the manifests using Kubernetes credentials
+                    withKubeConfig(credentialsId: params.KUBE_CREDENTIALS_ID) {
+                        sh "kubectl apply -f ${params.MANIFESTS_DIR}/deployment.yaml"
+                        sh "kubectl apply -f ${params.MANIFESTS_DIR}/service.yaml"
+                    }
                 }
             }
         }
