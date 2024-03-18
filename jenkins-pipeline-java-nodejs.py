@@ -2,7 +2,7 @@ import argparse
 from jinja2 import Environment, FileSystemLoader
 import os
 
-def generate_build_pipeline(repo_url, branch, build_tool, docker_image, docker_tag, dockerhub_credentials_id, namespace, job_name, manifests_dir, kube_credentials_id):
+def generate_build_pipeline(repo_url, branch, build_tool, dockerfile_dir, docker_image, docker_tag, dockerhub_credentials_id, namespace, job_name, manifests_dir, kube_credentials_id):
     # Set up Jinja environment
     template_dir = os.path.join(os.path.dirname(__file__), 'templates')
     env = Environment(loader=FileSystemLoader(template_dir))
@@ -15,6 +15,7 @@ def generate_build_pipeline(repo_url, branch, build_tool, docker_image, docker_t
         GIT_REPO=repo_url,
         GIT_BRANCH=branch,
         BUILD_TOOL=build_tool,
+        DOCKERFILE_DIR=dockerfile_dir,
         DOCKER_IMAGE=docker_image,
         DOCKER_TAG=docker_tag,
         DOCKERHUB_CREDENTIALS_ID=dockerhub_credentials_id,
@@ -29,17 +30,18 @@ def generate_build_pipeline(repo_url, branch, build_tool, docker_image, docker_t
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description='Generate Jenkins pipeline file')
-    parser.add_argument('-r', '--repo-url', type=str, help='Repository URL', dest='repo_url', required=True)
-    parser.add_argument('-b', '--branch', type=str, help='Branch', dest='branch', default='main')
-    parser.add_argument('-t', '--build-tool', type=str, help='Build tool', dest='build_tool', required=True, choices=['maven', 'gradle', 'npm', 'yarn'])
-    parser.add_argument('--docker-image', type=str, help='Docker Image', dest='docker_image', default='my-docker-image')
-    parser.add_argument('--docker-tag', type=str, help='Docker Tag', dest='docker_tag', default='latest')
-    parser.add_argument('--dockerhub-credentials-id', type=str, help='Docker Hub Credentials ID', dest='dockerhub_credentials_id', default='dockerhub-credentials')
-    parser.add_argument('-n', '--namespace', type=str, help='Namespace', dest='namespace', required=True)
-    parser.add_argument('--job-name', type=str, help='Job Name', dest='job_name', default='test')
-    parser.add_argument('--manifests-dir', type=str, help='Directory to store manifest files', dest='manifests_dir', default='manifests')
-    parser.add_argument('--kube-credentials-id', type=str, help='Kubernetes Credentials ID', dest='kube_credentials_id', default='k8s-credentials')
-    parser.add_argument('-o', '--output-file', type=str, help='Output file', dest='output_file', default='default_pipeline.groovy')
+    parser.add_argument('--repo-url', type=str, help='Repository URL', default='https://example.com')
+    parser.add_argument('--branch', type=str, help='Branch', default='main')
+    parser.add_argument('--build-tool', type=str, help='Build tool', default='maven', choices=['maven', 'gradle'])
+    parser.add_argument('--dockerfile-dir', type=str, help='Directory where Dockerfile is located', default='path/to/dockerfiles')
+    parser.add_argument('--docker-image', type=str, help='Docker Image', default='my-docker-image')
+    parser.add_argument('--docker-tag', type=str, help='Docker Tag', default='latest')
+    parser.add_argument('--dockerhub-credentials-id', type=str, help='Docker Hub Credentials ID', default='dockerhub-credentials')
+    parser.add_argument('--namespace', type=str, help='Namespace', default='default')
+    parser.add_argument('--job-name', type=str, help='Job Name', default='test')
+    parser.add_argument('--manifests-dir', type=str, help='Directory to store manifest files', default='manifests')
+    parser.add_argument('--kube-credentials-id', type=str, help='Kubernetes Credentials ID', default='k8s-credentials')
+    parser.add_argument('--output-file', type=str, help='Output file', default='default_pipeline.groovy'
     
     args = parser.parse_args()
 
@@ -48,6 +50,7 @@ def main():
         args.repo_url,
         args.branch,
         args.build_tool,
+        args.dockerfile_dir,
         args.docker_image,
         args.docker_tag,
         args.dockerhub_credentials_id,
