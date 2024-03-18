@@ -2,13 +2,18 @@ import argparse
 from jinja2 import Environment, FileSystemLoader
 import os
 
-def generate_build_pipeline(repo_url, branch, build_tool, dockerfile_dir, docker_image, docker_tag, dockerhub_credentials_id, namespace, job_name, manifests_dir, kube_credentials_id):
+def generate_build_pipeline(repo_url, branch, build_tool, dockerfile_dir, docker_image, docker_tag, dockerhub_credentials_id, namespace, job_name, manifests_dir, kube_credentials_id, language):
     # Set up Jinja environment
     template_dir = os.path.join(os.path.dirname(__file__), 'templates')
     env = Environment(loader=FileSystemLoader(template_dir))
     
-    # Load Jinja template
-    template = env.get_template('template_file.j2')
+    # Load Jinja template based on the language
+    if language == 'java':
+        template = env.get_template('java_pipeline.j2')
+    elif language == 'javascript':
+        template = env.get_template('nodejs_pipeline.j2')
+    else:
+        raise ValueError(f'Unsupported language: {language}')
 
     # Render template with provided inputs
     pipeline_script = template.render(
@@ -41,8 +46,9 @@ def main():
     parser.add_argument('--job-name', type=str, help='Job Name', default='test')
     parser.add_argument('--manifests-dir', type=str, help='Directory to store manifest files', default='manifests')
     parser.add_argument('--kube-credentials-id', type=str, help='Kubernetes Credentials ID', default='k8s-credentials')
-    parser.add_argument('--output-file', type=str, help='Output file', default='default_pipeline.groovy'
-    
+    parser.add_argument('--language', type=str, help='Programming language', choices=['java', 'javascript'], required=True)
+    parser.add_argument('--output-file', type=str, help='Output file', default='default_pipeline.groovy')
+
     args = parser.parse_args()
 
     # Generate Jenkins pipeline script
@@ -57,7 +63,8 @@ def main():
         args.namespace,
         args.job_name,
         args.manifests_dir,
-        args.kube_credentials_id
+        args.kube_credentials_id,
+        args.language
     )
 
     # Write the generated pipeline script to the output file
