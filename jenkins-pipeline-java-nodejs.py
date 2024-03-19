@@ -9,9 +9,7 @@ def generate_build_pipeline(repo_url, branch, build_tool, dockerfile_dir, docker
     
     # Load Jinja template based on the build tool
     if build_tool == 'maven':
-        template = env.get_template('maven_pipeline.j2')
-    elif build_tool == 'gradle':
-        template = env.get_template('gradle_pipeline.j2')
+        template = env.get_template('java_pipeline.j2')
     elif build_tool in ['npm', 'yarn']:
         template = env.get_template('nodejs_pipeline.j2')
     else:
