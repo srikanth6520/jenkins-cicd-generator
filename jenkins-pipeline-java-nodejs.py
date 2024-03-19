@@ -1,6 +1,6 @@
 import argparse
 from jinja2 import Environment, FileSystemLoader
-import os
+import os.path
 
 def generate_build_pipeline(repo_url, branch, build_tool, dockerfile_dir, docker_image, docker_tag, dockerhub_credentials_id, namespace, job_name, manifests_dir, kube_credentials_id):
     # Set up Jinja environment
